@@ -100,7 +100,7 @@ def calculate_component(p1, p2, max):
         new_2 = -1
     return (new_1, new_2)
 
-with open('02/input.txt') as fp:
+with open('08/input.txt') as fp:
     row_index = 0
     for row in fp:
         row = row.strip()
