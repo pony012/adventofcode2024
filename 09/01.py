@@ -48,6 +48,16 @@
 # 00...111...2...333.44.5555.6666.777.888899
 # 00998111
 
+# 00...111...2...333.44.5555.6666.777.888899
+# 14
+# 2
+# 
+# 0099811188827773336446555566
+# 0099811188827773336446555566
+# 00998111888277733364465555.6
+# 0 * 0 = 0, 1 * 0 = 0, 2 * 9 = 18, 3 * 9 = 27, 4 * 8 = 32
+# 1928
+
 # The final step of this file-compacting process is to update the filesystem checksum. To calculate the checksum, add up the result of multiplying each of these blocks' position with the file ID number it contains. The leftmost block is in position 0. If a block contains free space, skip it instead.
 
 # Continuing the first example, the first few blocks' position multiplied by its file ID number are 0 * 0 = 0, 1 * 0 = 0, 2 * 9 = 18, 3 * 9 = 27, 4 * 8 = 32, and so on. In this example, the checksum is the sum of these, 1928.
@@ -59,10 +69,11 @@
 FREE_CHAR = '.'
 
 class Block():
-    def __init__(self, index, length):
+    def __init__(self, index, length, is_data=True):
         super()
         self.index = index
         self.length = length
+        self.is_data = is_data
 
     def __str__(self):
         return f"(Index: {self.index}, Length: {self.length})"
@@ -74,41 +85,80 @@ class Disk:
     def __init__(self):
         super()
         self.data_blocks = []
-        self.current_insert_index = 0
         self.free_space_blocks = []
+        self.full_disk = []
+        self.current_insert_index = 0
+        self.spaces = 0
     
     def __str__(self):
         return f"Data: {self.data_blocks},\nFree: {self.free_space_blocks}"
 
+
     def insert_data_block(self, length):
-        data_block = Block(self.current_insert_index, length)
+        data_block = Block(self.current_insert_index, length, True)
         self.data_blocks.append(data_block)
         self.current_insert_index += 1
 
     def insert_free_memory(self, length):
-        free_space = Block(self.current_insert_index, length)
+        free_space = Block(self.current_insert_index, length, False)
         self.free_space_blocks.append(free_space)
+        self.spaces += length
+
+    def organize(self):
+        _data = self.data_blocks
+        _spaces = self.free_space_blocks
+        while(len(_data) > 0 or len(_spaces) > 0):
+            if len(_data) > 0:
+                self.full_disk.append(_data.pop(0))
+            if len(_spaces) > 0:
+                self.full_disk.append(_spaces.pop(0))
+        return self.full_disk
+    
+    def get_right_most_data_idx(self, from_right):
+        idx = from_right if from_right < len(self.full_disk) else len(self.full_disk) - 1
+        while(not self.full_disk[idx].is_data and idx > 0):
+            # print(f"right: {idx}")
+            idx -= 1
+        return idx
+
+    def get_left_most_space_idx(self, from_left):
+        idx = from_left
+        while(self.full_disk[idx].is_data and idx < (len(self.full_disk) - 1)):
+            # print(f"left: {idx}")
+            idx += 1
+        return idx
+    
+    def compute_hash(self):
+        sum = 0
+        position = 0
+        for block in self.full_disk:
+            for i in range(block.length):
+                # print(f"{position} * {block.index} = {position*block.index}")
+                sum += position * block.index
+                position += 1
+        return sum
+    
+    def remove_right_most_spaces(self):
+        spaces = 0
+        while(not self.full_disk[-1].is_data):
+            block = self.full_disk.pop()
+            spaces += block.length
+        return spaces
     
     def to_pretty_string(self):
-        data_length = len(self.data_blocks)
-        free_space_length = len(self.free_space_blocks)
-        is_data = True
         data_index = 0
-        free_space_index = 0
+        data_length = len(self.full_disk)
         pretty_string = ''
-        while(data_index < data_length or free_space_index < free_space_length):
-            if is_data and data_index < data_length:
-                block = self.data_blocks[data_index]
+        while(data_index < data_length):
+            block = self.full_disk[data_index]
+            if block.is_data:
                 pretty_string += str(block.index) * block.length
-                data_index += 1
-            if (not is_data) and free_space_index < free_space_length:
-                block = self.free_space_blocks[free_space_index]
+            if (not block.is_data):
                 pretty_string += '.' * block.length
-                free_space_index += 1
-            is_data = not is_data
+            data_index += 1
         return pretty_string
 
-with open('09/text.txt') as fp:
+with open('09/input.txt') as fp:
     numbers = fp
     disk = Disk()
     is_data = True
@@ -120,6 +170,53 @@ with open('09/text.txt') as fp:
         else:
             disk.insert_free_memory(number)
         is_data = not is_data
-    print(str(disk))
-    print(disk.to_pretty_string())
-        
+    disk.organize()
+    # print(numbers)
+    # print(str(disk))
+    # print(disk.to_pretty_string())
+    
+    # print(disk.to_pretty_string())
+    from_left = 0
+    from_right = len(disk.full_disk) - 1
+    while(disk.spaces > 0):
+        # right_data_idx = disk.get_right_most_data_idx(from_right + 1)
+        # left_space_idx = disk.get_left_most_space_idx(from_left)
+        # Unused "optimization"
+        right_data_idx = disk.get_right_most_data_idx(len(disk.full_disk) - 1)
+        left_space_idx = disk.get_left_most_space_idx(0)
+        from_left = left_space_idx
+        from_right = right_data_idx
+
+        right_data_length = disk.full_disk[right_data_idx].length
+        left_space_length = disk.full_disk[left_space_idx].length
+        if right_data_length == left_space_length:
+            # Data can be stored completley and exactly
+            disk_data = disk.full_disk.pop(right_data_idx)
+            disk.full_disk.pop(left_space_idx)
+            disk.full_disk.insert(left_space_idx, disk_data)
+            from_left -= 1
+            disk.spaces -= disk_data.length
+        elif right_data_length < left_space_length:
+            # Data can be stored completly but space left
+            disk_data = disk.full_disk.pop(right_data_idx)
+            space_data = disk.full_disk.pop(left_space_idx)
+            space_data.length -= disk_data.length
+            disk.full_disk.insert(left_space_idx, space_data)
+            disk.full_disk.insert(left_space_idx, disk_data)
+            from_left -= 1
+            disk.spaces -= disk_data.length
+        else:
+            # Data cannot be stored completly
+            available_space = disk.full_disk[left_space_idx].length
+            data_block = disk.full_disk[right_data_idx]
+            disk.full_disk[right_data_idx].length -= available_space
+
+            disk.full_disk[left_space_idx].index = data_block.index
+            disk.full_disk[left_space_idx].length = available_space
+            disk.full_disk[left_space_idx].is_data = True
+            disk.spaces -= available_space
+        remove_right_most_spaces = disk.remove_right_most_spaces()
+        disk.spaces -= remove_right_most_spaces
+        # print(disk.to_pretty_string())
+    # print(disk.to_pretty_string())
+    print(disk.compute_hash())
