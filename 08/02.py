@@ -63,7 +63,7 @@ def extend_point(p, diff_columns, diff_rows, right, down, right_limit, down_limi
         aux_point[1] = aux_point[1] + diff_rows if down else aux_point[1] - diff_rows
     return antinodes_count
 
-with open('02/input.txt') as fp:
+with open('08/input.txt') as fp:
     row_index = 0
     for row in fp:
         row = row.strip()
